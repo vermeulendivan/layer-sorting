@@ -25,6 +25,8 @@ from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
+from qgis.core import QgsProject, QgsMapLayerType
+
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
@@ -195,6 +197,23 @@ class LayerSorting:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
-            pass
+            print('start')
+            
+            list_layers = QgsProject.instance().mapLayers()
+            for layer_id, layer in list_layers.items():
+                layer_name = layer.name()
+                layer_type = layer.type()
+                #test = layer.geometry()
+                
+                if layer_type == QgsMapLayerType.RasterLayer:
+                    print("Raster name: " + layer_name)
+                elif layer_type == QgsMapLayerType.VectorLayer:
+                    print("Vector name: " + layer_name)
+                    feat = layer.getFeatures()
+                    for feature in feat:
+                        geom = feature.geometry()
+                        print("geom: " + str(geom))
+                
+
+            
+            print('end')
