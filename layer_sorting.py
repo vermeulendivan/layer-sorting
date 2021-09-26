@@ -25,11 +25,13 @@ from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
+from qgis.core import QgsProject, QgsMapLayerType, QgsGeometry, QgsWkbTypes
+
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
 from .layer_sorting_dialog import LayerSortingDialog
-import os.path
+import sys, os.path
 
 
 class LayerSorting:
@@ -181,8 +183,6 @@ class LayerSorting:
 
 
     def run(self):
-        """Run method that performs all the real work"""
-
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
         if self.first_start == True:
@@ -193,8 +193,110 @@ class LayerSorting:
         self.dlg.show()
         # Run the dialog event loop
         result = self.dlg.exec_()
-        # See if OK was pressed
+
+        # OK has been pressed
         if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
-            pass
+            print('start')
+            
+            project_root = QgsProject.instance().layerTreeRoot()
+            list_tree_layers = project_root.children()
+            
+            list_layers = []  # Stores the QgsVectorLayers
+            dict_layers = {}  # Store layers according to geometry type
+            for tree_layer in list_tree_layers:  # Loops through all of the layers
+                layer = tree_layer.layer()  # QgsVectorLayer object
+                
+                layer_id, layer_type, layer_name, layer_feature_cnt, layer_geom = self.get_layer_info(tree_layer, layer)
+            
+                # Stores the information for a layer in a dictionary
+                if layer_geom not in dict_layers:
+                    dict_layers.update({layer_geom:[[layer_name, layer_id, tree_layer, layer_type, layer_feature_cnt]]})
+                else:
+                    dict_layers[layer_geom].append([layer_name, layer_id, tree_layer, layer_type, layer_feature_cnt])
+            
+            self.sort_layers(project_root, dict_layers)
+            
+            print('end')
+        
+
+    # Gets information of the layer from the tree_layer and layer objects
+    # Layer ID, type, name, feature count, and geometry type
+    def get_layer_info(self, tree_layer, layer):
+        layer_id = tree_layer.layerId()
+        layer_type = self.get_layer_type(layer)  # Raster or vector
+                
+        # Check whether the layer is vector or raster
+        if layer_type == "vector":
+            layer_name = tree_layer.name()
+            layer_feature_cnt = layer.featureCount()
+            layer_geom = self.get_geometry_type(layer)
+        elif layer_type == "raster":
+            layer_name = tree_layer.name()
+            layer_feature_cnt = None
+            layer_geom = "pixel"
+        
+        return layer_id, layer_type, layer_name, layer_feature_cnt, layer_geom
+
+
+    # Determines the layer type and returns a string
+    def get_layer_type(self, layer):
+        layer_type = layer.type()
+        if layer_type == QgsMapLayerType.RasterLayer:
+            return "raster"
+        elif layer_type == QgsMapLayerType.VectorLayer:
+            return "vector"
+        
+        return "UNKNOWN LAYER TYPE"
+    
+    # Gets the geometry type from a layer feature
+    def get_geometry_type(self, layer):
+        geom = layer.geometryType()
+        if geom == 0:  # Point vectors
+            return "point"
+        elif geom == 1:  # Polyline vectors
+            return "line"
+        elif geom == 2:  # Polygon vectors
+            return "polygon"
+            
+        return "UNKNOWN GEOMETRY TYPE"
+    
+
+    # Sorts the layers
+    def sort_layers(self, project_root, dict_layers):
+        
+        for raster in dict_layers.get("pixel"):
+                orig_layer_tree = raster[2]
+                clone_layer_tree = orig_layer_tree.clone()
+                
+                project_root.insertChildNodes(0, [clone_layer_tree])
+                project_root.removeChildNode(orig_layer_tree)
+        
+        for polygon in dict_layers.get("polygon"):
+                orig_layer_tree = polygon[2]
+                clone_layer_tree = orig_layer_tree.clone()
+                
+                project_root.insertChildNodes(0, [clone_layer_tree])
+                project_root.removeChildNode(orig_layer_tree)
+        
+        for line in dict_layers.get("line"):
+                orig_layer_tree = line[2]
+                clone_layer_tree = orig_layer_tree.clone()
+                
+                project_root.insertChildNodes(0, [clone_layer_tree])
+                project_root.removeChildNode(orig_layer_tree)
+        
+        for point in dict_layers.get("point"):
+                orig_layer_tree = point[2]
+                clone_layer_tree = orig_layer_tree.clone()
+                
+                project_root.insertChildNodes(0, [clone_layer_tree])
+                project_root.removeChildNode(orig_layer_tree)
+
+
+
+
+
+
+
+
+
