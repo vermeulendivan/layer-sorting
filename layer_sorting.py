@@ -25,7 +25,11 @@ from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
+<<<<<<< HEAD
 from qgis.core import QgsProject, QgsMapLayerType, QgsGeometry, QgsWkbTypes
+=======
+from qgis.core import QgsProject, QgsMapLayerType
+>>>>>>> 9f6abeb52e4e4f2668dc5d6c0ea13770bac5b666
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -201,6 +205,7 @@ class LayerSorting:
             list_layers = QgsProject.instance().mapLayers()
             for layer_id, layer in list_layers.items():
                 layer_name = layer.name()
+<<<<<<< HEAD
                 layer_type = self.get_layer_type(layer)
                 layer_geom = None
                 
@@ -270,3 +275,20 @@ class LayerSorting:
     
     
     
+=======
+                layer_type = layer.type()
+                #test = layer.geometry()
+                
+                if layer_type == QgsMapLayerType.RasterLayer:
+                    print("Raster name: " + layer_name)
+                elif layer_type == QgsMapLayerType.VectorLayer:
+                    print("Vector name: " + layer_name)
+                    feat = layer.getFeatures()
+                    for feature in feat:
+                        geom = feature.geometry()
+                        print("geom: " + str(geom))
+                
+
+            
+            print('end')
+>>>>>>> 9f6abeb52e4e4f2668dc5d6c0ea13770bac5b666
