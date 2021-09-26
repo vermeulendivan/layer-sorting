@@ -25,11 +25,13 @@ from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
+from qgis.core import QgsProject, QgsMapLayerType, QgsGeometry, QgsWkbTypes
+
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
 from .layer_sorting_dialog import LayerSortingDialog
-import os.path
+import sys, os.path
 
 
 class LayerSorting:
@@ -181,8 +183,6 @@ class LayerSorting:
 
 
     def run(self):
-        """Run method that performs all the real work"""
-
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
         if self.first_start == True:
@@ -193,8 +193,80 @@ class LayerSorting:
         self.dlg.show()
         # Run the dialog event loop
         result = self.dlg.exec_()
-        # See if OK was pressed
+        
+        # OK has been pressed
         if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
-            pass
+            print('start')
+            
+            list_layers = QgsProject.instance().mapLayers()
+            for layer_id, layer in list_layers.items():
+                layer_name = layer.name()
+                layer_type = self.get_layer_type(layer)
+                layer_geom = None
+                
+                if layer_type == "vector":
+                    print("Name: " + layer_name)
+                    print("Type: " + layer_type)
+                    layer_geom = self.get_geometry_type(layer)
+                    print("Geom: " + layer_geom)
+                
+                
+                
+            #self.arrange_layers(list_layers)
+            
+            print('end')
+        
+
+
+    # Determines the layer type and returns a string
+    def get_layer_type(self, layer):
+        layer_type = layer.type()
+        if layer_type == QgsMapLayerType.RasterLayer:
+            return "raster"
+        elif layer_type == QgsMapLayerType.VectorLayer:
+            return "vector"
+        
+        return "UNKNOWN LAYER TYPE"
+    
+    # Gets the geometry type from a layer feature
+    def get_geometry_type(self, layer):
+        features = layer.getFeatures()
+        
+        geom = None
+        for feature in features:
+            geom = feature.geometry()
+            break
+        
+        # If the layer is not empty and the geometry type could be determined
+        if geom is not None:
+            wkb_type = geom.wkbType()
+            
+            if wkb_type == QgsWkbTypes.Point or wkb_type == QgsWkbTypes.MultiPoint:
+                return "point"
+            elif wkb_type == QgsWkbTypes.LineString or wkb_type == QgsWkbTypes.CompoundCurve or wkb_type == QgsWkbTypes.MultiCurve or wkb_type == QgsWkbTypes.MultiLineString:
+                return "line"
+            elif wkb_type == QgsWkbTypes.Polygon or wkb_type == QgsWkbTypes.MultiPolygon or wkb_type == QgsWkbTypes.CurvePolygon or wkb_type == QgsWkbTypes.MultiSurface:
+                return "polygon"
+            
+        return "UNKNOWN GEOMETRY TYPE"
+        
+        
+    def arrange_layers(self, list_layers):
+        print("test")
+        
+        bridge = self.iface.layerTreeCanvasBridge()
+        order = bridge.rootGroup().customLayerOrder()
+        
+        print("ORDER: " + str(order))
+        
+        
+        
+        
+        
+        
+        
+        
+        
+    
+    
+    
