@@ -25,11 +25,13 @@ from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
+from qgis.core import QgsProject, QgsMapLayerType, QgsGeometry, QgsWkbTypes, QgsLayerTreeGroup, QgsLayerTreeLayer
+
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
 from .layer_sorting_dialog import LayerSortingDialog
-import os.path
+import sys, os.path
 
 
 class LayerSorting:
@@ -181,8 +183,6 @@ class LayerSorting:
 
 
     def run(self):
-        """Run method that performs all the real work"""
-
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
         if self.first_start == True:
@@ -193,8 +193,163 @@ class LayerSorting:
         self.dlg.show()
         # Run the dialog event loop
         result = self.dlg.exec_()
-        # See if OK was pressed
+
+        # OK has been pressed
         if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
-            pass
+            sort_type = self.dlg.cbSortType.currentText()
+            grouping_type = self.dlg.cbGrouping.currentText()
+            project_root = QgsProject.instance().layerTreeRoot()
+            list_tree_layers = project_root.children()
+            
+            list_groups = []  # Stores the QgsLayerTreeGroup objects
+            dict_layers = {}  # Store layers according to geometry type
+            for tree_layer in list_tree_layers:  # Loops through all of the layers
+                if type(tree_layer) == QgsLayerTreeLayer:
+                    layer = tree_layer.layer()  # QgsVectorLayer object
+                    
+                    # Reads all of the information from the layer objects
+                    layer_id, layer_type, layer_name, layer_feature_cnt, layer_geom = self.get_layer_info(tree_layer, layer)
+                
+                    # Stores the information for a layer in a dictionary
+                    # Lowercase used for layer name for when alphabetic sorting is performed
+                    if layer_geom not in dict_layers:
+                        dict_layers.update({layer_geom:[[layer_name.lower(), layer_id, tree_layer, layer_type, layer_feature_cnt]]})
+                    else:
+                        dict_layers[layer_geom].append([layer_name.lower(), layer_id, tree_layer, layer_type, layer_feature_cnt])
+                elif type(tree_layer) == QgsLayerTreeGroup:
+                    if grouping_type == "Remove groups":
+                        group_layers = tree_layer.findLayers()
+                        list_groups.append(tree_layer)
+                        
+                        for group_layer in group_layers:
+                            layer = group_layer.layer()  # QgsVectorLayer object
+                        
+                            # Reads all of the information from the layer objects
+                            layer_id, layer_type, layer_name, layer_feature_cnt, layer_geom = self.get_layer_info(group_layer, layer)
+                        
+                            # Stores the information for a layer in a dictionary
+                            # Lowercase used for layer name for when alphabetic sorting is performed
+                            if layer_geom not in dict_layers:
+                                dict_layers.update({layer_geom:[[layer_name.lower(), layer_id, group_layer, layer_type, layer_feature_cnt]]})
+                            else:
+                                dict_layers[layer_geom].append([layer_name.lower(), layer_id, group_layer, layer_type, layer_feature_cnt])
+                        #list_groups.append()
+                    elif grouping_type == "Keep groups":
+                        print("keep groups")
+                else:
+                    print("UNKNOWN LAYER TYPE")
+            
+            # Performs sorting for each geometry alphabetically or by feature count
+            rasters, polygons, polylines, points = self.sort_type_groups(dict_layers, sort_type)
+            
+            # Adds the reordered layers to QGIS
+            # Removes the no longer needed unordered layers from QGIS
+            self.update_layers(project_root, rasters, polygons, polylines, points)
+            
+            if grouping_type == "Remove groups":
+                self.remove_groups(project_root, list_groups)
+
+
+    # Removes all group layers (QgsLayerTreeGroup) provided in a list
+    def remove_groups(self, project_root, groups):
+        for group in groups:
+            project_root.removeChildNode(group)
+
+
+    # Gets information of the layer from the tree_layer and layer objects
+    # Layer ID, type, name, feature count, and geometry type
+    def get_layer_info(self, tree_layer, layer):
+        layer_id = tree_layer.layerId()
+        layer_type = self.get_layer_type(layer)  # Raster or vector
+                
+        # Check whether the layer is vector or raster
+        if layer_type == "vector":
+            layer_name = tree_layer.name()
+            layer_feature_cnt = layer.featureCount()
+            layer_geom = self.get_geometry_type(layer)
+        elif layer_type == "raster":
+            layer_name = tree_layer.name()
+            layer_feature_cnt = None
+            layer_geom = "pixel"
+        
+        return layer_id, layer_type, layer_name, layer_feature_cnt, layer_geom
+
+
+    # Determines the layer type and returns a string
+    def get_layer_type(self, layer):
+        layer_type = layer.type()
+        if layer_type == QgsMapLayerType.RasterLayer:
+            return "raster"
+        elif layer_type == QgsMapLayerType.VectorLayer:
+            return "vector"
+        
+        return "UNKNOWN LAYER TYPE"
+    
+    # Gets the geometry type from a layer feature
+    def get_geometry_type(self, layer):
+        geom = layer.geometryType()
+        if geom == 0:  # Point vectors
+            return "point"
+        elif geom == 1:  # Polyline vectors
+            return "line"
+        elif geom == 2:  # Polygon vectors
+            return "polygon"
+            
+        return "UNKNOWN GEOMETRY TYPE"
+    
+    
+    # Adds the sorted layers to QGIS
+    # Points, polylines, polygons, and then rasters
+    def update_layers(self, project_root, rasters, polygons, polylines, points):
+        # Adds reordered rasters to QGIS
+        for raster in rasters:
+                orig_layer_tree = raster[2]
+                clone_layer_tree = orig_layer_tree.clone()
+                
+                project_root.insertChildNodes(0, [clone_layer_tree])
+                project_root.removeChildNode(orig_layer_tree)
+        
+        # Adds reordered polygons to QGIS
+        for polygon in polygons:
+                orig_layer_tree = polygon[2]
+                clone_layer_tree = orig_layer_tree.clone()
+                
+                project_root.insertChildNodes(0, [clone_layer_tree])
+                project_root.removeChildNode(orig_layer_tree)
+        
+        # Adds reordered polylines to QGIS
+        for line in polylines:
+                orig_layer_tree = line[2]
+                clone_layer_tree = orig_layer_tree.clone()
+                
+                project_root.insertChildNodes(0, [clone_layer_tree])
+                project_root.removeChildNode(orig_layer_tree)
+        
+        # Adds reordered points to QGIS
+        for point in points:
+                orig_layer_tree = point[2]
+                clone_layer_tree = orig_layer_tree.clone()
+                
+                project_root.insertChildNodes(0, [clone_layer_tree])
+                project_root.removeChildNode(orig_layer_tree)
+
+
+    # Sorts the layers for each geometry type
+    # Two cases: sorts according to layer name (alphabetically) or feature count
+    def sort_type_groups(self, dict_layers, sort_type):
+        # Alphabetical sorting. A to Z
+        if sort_type == "Alphabetic":
+            rasters = sorted(dict_layers.get("pixel"), key=lambda x: x[0], reverse=True)
+            polygons = sorted(dict_layers.get("polygon"), key=lambda x: x[0], reverse=True)
+            polylines = sorted(dict_layers.get("line"), key=lambda x: x[0], reverse=True)
+            points = sorted(dict_layers.get("point"), key=lambda x: x[0], reverse=True)
+            
+            return rasters, polygons, polylines, points
+        # Feature count sorting. Low to high
+        elif sort_type == "Feature count":
+            rasters = sorted(dict_layers.get("pixel"), key=lambda x: x[0], reverse=True)
+            polygons = sorted(dict_layers.get("polygon"), key=lambda x: x[4], reverse=True)
+            polylines = sorted(dict_layers.get("line"), key=lambda x: x[4], reverse=True)
+            points = sorted(dict_layers.get("point"), key=lambda x: x[4], reverse=True)
+        
+            return rasters, polygons, polylines, points
