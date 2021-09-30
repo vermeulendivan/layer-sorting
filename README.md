@@ -1,5 +1,5 @@
 # layer-sorting
-Sort all layers open in QGIS according to geometry in the QGIS layer list. Rasters will be sorted to the bottom of the list.
+Sort all layers open in QGIS according to geometry in the QGIS layer list: points, lines and then polygons. Rasters will be sorted to the bottom of the list.
 Group and subgroup sorting can also be performed
 
 ## Installation
@@ -13,9 +13,27 @@ Group and subgroup sorting can also be performed
    3) Create a folder "layer_sorting"
    4) Paste the cloned/downloaded files into the folder
 
-## How to use the plugin
+## Plugin information
+Sorting will be done as follows:
+1) Points
+2) Lines
+3) Polygons
+4) Rasters
+
+Opening the plugin:
 1) Go to Plugins > Layer sorting > Layer sorting
 2) Click on the layer sorting toolbar button:
+![Icon](https://github.com/vermeulendivan/layer-sorting/blob/main/data/icon.png)
 
+The plugin window:
+![Plugin](https://github.com/vermeulendivan/layer-sorting/blob/main/data/plugin_window.png)
 
-![image](https://github.com/vermeulendivan/layer-sorting/blob/main/data/plugin_window.png)
+The user has two parameters to set:
+1) Sort type:
+   1) Alphabetic: Layers in the root, groups, and subgroups will be sorted alphabetically (A to Z)
+   2) Feature count: Sorts the layers according to feature count, with the layer with the least number of features at the top
+2) Group by:
+   1) Keep groups: All groups and subgroups will be used, with sorting applied within each of the groups
+   2) Remove groups: All layers within groups and subgroups will be moved to the root, and the groups will be removed
+
+Sort type will be applied to each type of geometry, and rasters individually.
