@@ -84,7 +84,6 @@ class LayerSorting:
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate('LayerSorting', message)
 
-
     def add_action(
         self,
         icon_path,
@@ -172,7 +171,6 @@ class LayerSorting:
         # will be set False in run()
         self.first_start = True
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
@@ -180,7 +178,6 @@ class LayerSorting:
                 self.tr(u'&Layer sorting'),
                 action)
             self.iface.removeToolBarIcon(action)
-
 
     def run(self):
         # Create the dialog with elements (after translation) and keep reference
@@ -196,20 +193,33 @@ class LayerSorting:
 
         # OK has been pressed
         if result:
-            sort_type = self.dlg.cbSortType.currentText()  # "Alphabetic" or "Feature count"
-            grouping_type = self.dlg.cbGrouping.currentText()  # "Keep groups" or "Remove groups"
+            # Get the sorting type which should be applied
+            sort_feat_cnt = self.dlg.radBut_featureCnt.isChecked()
+            sort_alphabetic = self.dlg.radBut_alpha.isChecked()
+            if sort_feat_cnt:
+                sort_type = "Feature count"
+            elif sort_alphabetic:
+                sort_type = "Alphabetic"
+
+            # Grouping type which will be used when sorting is performed
+            group_keep = self.dlg.radBut_keepGroups.isChecked()
+            group_geometry = self.dlg.radBut_geometryGroups.isChecked()
+            group_remove_groups = self.dlg.radBut_removeGroups.isChecked()
+
+            auto_sorting = self.dlg.chcBox_autoSorting.isChecked()
+
             project_root = QgsProject.instance().layerTreeRoot()  # Tree root
             list_tree_layers = project_root.children()  # Lists all of the nodes in the tree root
-            
-            list_groups = []
+
+            list_groups = []  # List of original groups. This will only be used if the groups are removed
             dict_layers = {}  # Store layers according to geometry type for the root
             for tree_layer in list_tree_layers:  # Loops through all of the layers/groups in the root
                 if type(tree_layer) == QgsLayerTreeLayer:  # Layer found in tree root
                     dict_layers = self.update_dict(tree_layer, dict_layers)
                 elif type(tree_layer) == QgsLayerTreeGroup:  # Group found in tree root
-                    
+
                     # This will remove all groups and sort all layers in the root
-                    if grouping_type == "Remove groups":
+                    if group_remove_groups:
                         group_layers = tree_layer.findLayers()
                         list_groups.append(tree_layer)
                         
@@ -217,7 +227,7 @@ class LayerSorting:
                             dict_layers = self.update_dict(group_layer, dict_layers)
 
                     # This will not remove the groups, but also perform sorting within each group/subgroup
-                    elif grouping_type == "Keep groups":
+                    elif group_keep:
                         # Gets the layers for each group and subgroup
                         groups_data = self.find_group_layers(tree_layer, [], [])
                         
@@ -237,6 +247,8 @@ class LayerSorting:
                             # Adds the reordered layers to QGIS for the root layers
                             # Removes the no longer needed unordered layers from QGIS
                             self.update_layers(group_obj, rasters, polygons, polylines, points)
+                    elif group_geometry:
+                        print("NOT SUPPORTED YET")
                 else:
                     print("UNKNOWN LAYER TYPE")
             
@@ -248,10 +260,9 @@ class LayerSorting:
             self.update_layers(project_root, rasters, polygons, polylines, points)
             
             # Removes all of the groups if the 'remove groups' option has been selected
-            if grouping_type == "Remove groups":
+            if group_remove_groups:
                 self.remove_groups(project_root, list_groups)
 
-    
     # Updates the dictionary which contains the layers of the root or a specific group
     def update_dict(self, tree_layer, cur_dict):
         layer = tree_layer.layer()
@@ -268,7 +279,6 @@ class LayerSorting:
             cur_dict[layer_geom].append([layer_name.lower(), layer_id, tree_layer, layer_type, layer_feature_cnt])
 
         return cur_dict
-
 
     # Finds all of the layers in each of the groups and subgroups
     # Recursively iterates through all of the groups and subgroups
@@ -289,7 +299,6 @@ class LayerSorting:
         
         return current_list
 
-
     # Removes elements in a list
     def remove_from_list(self, group_layers, list_remove):
         for group_element in list_remove:
@@ -298,12 +307,10 @@ class LayerSorting:
                 group_layers.remove(element_to_remove)
         return group_layers
 
-
     # Removes all group layers (QgsLayerTreeGroup) provided in a list
     def remove_groups(self, project_root, groups):
         for group in groups:
             project_root.removeChildNode(group)
-
 
     # Gets information of the layer from the tree_layer and layer objects
     # Layer ID, type, name, feature count, and geometry type
@@ -322,7 +329,6 @@ class LayerSorting:
             layer_geom = "pixel"
         
         return layer_id, layer_type, layer_name, layer_feature_cnt, layer_geom
-
 
     # Determines the layer type and returns a string
     def get_layer_type(self, layer):
@@ -345,8 +351,7 @@ class LayerSorting:
             return "polygon"
             
         return "UNKNOWN GEOMETRY TYPE"
-    
-    
+
     # Adds the sorted layers to QGIS
     # Points, polylines, polygons, and then rasters
     def update_layers(self, project_root, rasters, polygons, polylines, points):
@@ -381,8 +386,6 @@ class LayerSorting:
             
             project_root.insertChildNodes(0, [clone_layer_tree])
             project_root.removeChildNode(orig_layer_tree)
-
-
 
     # Sorts the layers for each geometry type
     # Two cases: sorts according to layer name (alphabetically) or feature count

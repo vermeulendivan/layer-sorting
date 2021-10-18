@@ -6,95 +6,109 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>234</width>
-    <height>146</height>
+    <width>227</width>
+    <height>171</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Layer sorting</string>
   </property>
-  <widget class="QDialogButtonBox" name="button_box">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>110</y>
-     <width>161</width>
-     <height>32</height>
-    </rect>
-   </property>
-   <property name="orientation">
-    <enum>Qt::Horizontal</enum>
-   </property>
-   <property name="standardButtons">
-    <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
-   </property>
-  </widget>
-  <widget class="QComboBox" name="cbSortType">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>30</y>
-     <width>201</width>
-     <height>22</height>
-    </rect>
-   </property>
-   <item>
-    <property name="text">
-     <string>Alphabetic</string>
-    </property>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <widget class="QLabel" name="lbGrouping">
+     <property name="text">
+      <string>Group by:</string>
+     </property>
+    </widget>
    </item>
-   <item>
-    <property name="text">
-     <string>Feature count</string>
-    </property>
+   <item row="0" column="1">
+    <widget class="QLabel" name="lbSortType">
+     <property name="text">
+      <string>Sort type:</string>
+     </property>
+    </widget>
    </item>
-  </widget>
-  <widget class="QLabel" name="lbSortType">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>10</y>
-     <width>81</width>
-     <height>16</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Sort type:</string>
-   </property>
-  </widget>
-  <widget class="QLabel" name="lbGrouping">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>60</y>
-     <width>81</width>
-     <height>16</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Group by:</string>
-   </property>
-  </widget>
-  <widget class="QComboBox" name="cbGrouping">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>80</y>
-     <width>201</width>
-     <height>22</height>
-    </rect>
-   </property>
-   <item>
-    <property name="text">
-     <string>Keep groups</string>
-    </property>
+   <item row="1" column="0">
+    <widget class="QRadioButton" name="radBut_keepGroups">
+     <property name="text">
+      <string>Keep groups</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+     <attribute name="buttonGroup">
+      <string notr="true">group_sortType</string>
+     </attribute>
+    </widget>
    </item>
-   <item>
-    <property name="text">
-     <string>Remove groups</string>
-    </property>
+   <item row="1" column="1">
+    <widget class="QRadioButton" name="radBut_featureCnt">
+     <property name="text">
+      <string>Feature count</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+     <attribute name="buttonGroup">
+      <string notr="true">group_groupBy</string>
+     </attribute>
+    </widget>
    </item>
-  </widget>
+   <item row="2" column="0">
+    <widget class="QRadioButton" name="radBut_geometryGroups">
+     <property name="text">
+      <string>Geometry type</string>
+     </property>
+     <attribute name="buttonGroup">
+      <string notr="true">group_sortType</string>
+     </attribute>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QRadioButton" name="radBut_alpha">
+     <property name="text">
+      <string>Alphabetically</string>
+     </property>
+     <attribute name="buttonGroup">
+      <string notr="true">group_groupBy</string>
+     </attribute>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <widget class="QRadioButton" name="radBut_removeGroups">
+     <property name="text">
+      <string>Remove groups</string>
+     </property>
+     <attribute name="buttonGroup">
+      <string notr="true">group_sortType</string>
+     </attribute>
+    </widget>
+   </item>
+   <item row="4" column="0">
+    <widget class="QLabel" name="lbOther">
+     <property name="text">
+      <string>Other options:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="0">
+    <widget class="QCheckBox" name="chcBox_autoSorting">
+     <property name="text">
+      <string>Automated sorting</string>
+     </property>
+    </widget>
+   </item>
+   <item row="6" column="0" colspan="2">
+    <widget class="QDialogButtonBox" name="button_box">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
  </widget>
  <resources/>
  <connections>
@@ -131,4 +145,8 @@
    </hints>
   </connection>
  </connections>
+ <buttongroups>
+  <buttongroup name="group_sortType"/>
+  <buttongroup name="group_groupBy"/>
+ </buttongroups>
 </ui>
