@@ -25,7 +25,7 @@ from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
-from qgis.core import QgsProject, QgsMapLayerType, QgsGeometry, QgsWkbTypes, QgsLayerTreeGroup, QgsLayerTreeLayer
+from qgis.core import QgsProject, QgsMapLayerType, QgsGeometry, QgsWkbTypes, QgsLayerTreeGroup, QgsLayerTreeLayer, QgsSettings
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -68,6 +68,10 @@ class LayerSorting:
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
+
+        # Signals
+        QgsProject.instance().layersAdded.connect(self.layers_added)
+        QgsProject.instance().layersRemoved.connect(self.layers_added)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -193,75 +197,115 @@ class LayerSorting:
 
         # OK has been pressed
         if result:
-            # Get the sorting type which should be applied
-            sort_feat_cnt = self.dlg.radBut_featureCnt.isChecked()
-            sort_alphabetic = self.dlg.radBut_alpha.isChecked()
-            if sort_feat_cnt:
-                sort_type = "Feature count"
-            elif sort_alphabetic:
-                sort_type = "Alphabetic"
-
-            # Grouping type which will be used when sorting is performed
-            group_keep = self.dlg.radBut_keepGroups.isChecked()
-            group_geometry = self.dlg.radBut_geometryGroups.isChecked()
-            group_remove_groups = self.dlg.radBut_removeGroups.isChecked()
-
-            auto_sorting = self.dlg.chcBox_autoSorting.isChecked()
+            sort_type, grouping_type, auto_sort = self.get_parameters()
+            self.set_settings(sort_type, grouping_type, auto_sort)
 
             project_root = QgsProject.instance().layerTreeRoot()  # Tree root
             list_tree_layers = project_root.children()  # Lists all of the nodes in the tree root
 
-            list_groups = []  # List of original groups. This will only be used if the groups are removed
-            dict_layers = {}  # Store layers according to geometry type for the root
-            for tree_layer in list_tree_layers:  # Loops through all of the layers/groups in the root
-                if type(tree_layer) == QgsLayerTreeLayer:  # Layer found in tree root
-                    dict_layers = self.update_dict(tree_layer, dict_layers)
-                elif type(tree_layer) == QgsLayerTreeGroup:  # Group found in tree root
+            self.perform_sorting(project_root, list_tree_layers, sort_type, grouping_type)
 
-                    # This will remove all groups and sort all layers in the root
-                    if group_remove_groups:
-                        group_layers = tree_layer.findLayers()
-                        list_groups.append(tree_layer)
-                        
-                        for group_layer in group_layers:
-                            dict_layers = self.update_dict(group_layer, dict_layers)
+    #
+    def perform_sorting(self, project_root, list_tree_layers, sort_type, grouping_type):
+        print("sorting")
+        list_groups = []  # List of original groups. This will only be used if the groups are removed
+        dict_layers = {}  # Store layers according to geometry type for the root
+        for tree_layer in list_tree_layers:  # Loops through all of the layers/groups in the root
+            if type(tree_layer) == QgsLayerTreeLayer:  # Layer found in tree root
+                dict_layers = self.update_dict(tree_layer, dict_layers)
+            elif type(tree_layer) == QgsLayerTreeGroup:  # Group found in tree root
 
-                    # This will not remove the groups, but also perform sorting within each group/subgroup
-                    elif group_keep:
-                        # Gets the layers for each group and subgroup
-                        groups_data = self.find_group_layers(tree_layer, [], [])
-                        
-                        # Loops through each of the found groups/subgroups
-                        for group_data in groups_data:
-                            group_obj = group_data[1]  # QgsLayerTreeGroup object
-                            list_group_layers = group_data[3]  # List of layers for the group
-                            
-                            dict_group_layers = {}  # Store layers according to geometry type for each group and subgroup
-                            for group_layer in list_group_layers:  # Loops through each of the layers in a group
-                                dict_group_layers = self.update_dict(group_layer, dict_group_layers)
-                            
-                            # Adds the reordered layers to QGIS for the a group
-                            # Removes the no longer needed unordered layers from QGIS
-                            rasters, polygons, polylines, points = self.sort_type_groups(dict_group_layers, sort_type)
-                            
-                            # Adds the reordered layers to QGIS for the root layers
-                            # Removes the no longer needed unordered layers from QGIS
-                            self.update_layers(group_obj, rasters, polygons, polylines, points)
-                    elif group_geometry:
-                        print("NOT SUPPORTED YET")
-                else:
-                    print("UNKNOWN LAYER TYPE")
-            
-            # Performs sorting for each geometry alphabetically or by feature count for the root layers
-            rasters, polygons, polylines, points = self.sort_type_groups(dict_layers, sort_type)
-            
-            # Adds the reordered layers to QGIS for the root layers
-            # Removes the no longer needed unordered layers from QGIS
-            self.update_layers(project_root, rasters, polygons, polylines, points)
-            
-            # Removes all of the groups if the 'remove groups' option has been selected
-            if group_remove_groups:
-                self.remove_groups(project_root, list_groups)
+                # This will remove all groups and sort all layers in the root
+                if grouping_type == "Remove groups":
+                    group_layers = tree_layer.findLayers()
+                    list_groups.append(tree_layer)
+
+                    for group_layer in group_layers:
+                        dict_layers = self.update_dict(group_layer, dict_layers)
+
+                # This will not remove the groups, but also perform sorting within each group/subgroup
+                elif grouping_type == "Keep groups":
+                    # Gets the layers for each group and subgroup
+                    groups_data = self.find_group_layers(tree_layer, [], [])
+
+                    # Loops through each of the found groups/subgroups
+                    for group_data in groups_data:
+                        group_obj = group_data[1]  # QgsLayerTreeGroup object
+                        list_group_layers = group_data[3]  # List of layers for the group
+
+                        dict_group_layers = {}  # Store layers according to geometry type for each group and subgroup
+                        for group_layer in list_group_layers:  # Loops through each of the layers in a group
+                            dict_group_layers = self.update_dict(group_layer, dict_group_layers)
+
+                        # Adds the reordered layers to QGIS for the a group
+                        # Removes the no longer needed unordered layers from QGIS
+                        rasters, polygons, polylines, points = self.sort_type_groups(dict_group_layers, sort_type)
+
+                        # Adds the reordered layers to QGIS for the root layers
+                        # Removes the no longer needed unordered layers from QGIS
+                        self.update_layers(group_obj, rasters, polygons, polylines, points)
+                elif grouping_type == "Geometry groups":
+                    print("NOT SUPPORTED YET")
+            else:
+                print("UNKNOWN LAYER TYPE")
+
+        # Performs sorting for each geometry alphabetically or by feature count for the root layers
+        rasters, polygons, polylines, points = self.sort_type_groups(dict_layers, sort_type)
+
+        # Adds the reordered layers to QGIS for the root layers
+        # Removes the no longer needed unordered layers from QGIS
+        self.update_layers(project_root, rasters, polygons, polylines, points)
+
+        # Removes all of the groups if the 'remove groups' option has been selected
+        if grouping_type == "Remove groups":
+            self.remove_groups(project_root, list_groups)
+
+
+    def layers_added(self, layer):
+        print("layer added: " + str(layer))
+
+    #
+    def set_settings(self, sort_type, grouping_type, auto_sorting):
+        settings = QgsSettings()
+        settings.setValue("layer_sorting/sort_type", sort_type)
+        settings.setValue("layer_sorting/grouping_type", grouping_type)
+        settings.setValue("layer_sorting/auto_sorting", auto_sorting)
+
+    #
+    def get_settings(self):
+        settings = QgsSettings()
+        sort_type = settings.value("layer_sorting/sort_type", "UNKNOWN")
+        grouping_type = settings.value("layer_sorting/grouping_type", "UNKNOWN")
+        auto_sorting = settings.value("layer_sorting/auto_sorting", "UNKNOWN")
+
+        return sort_type, grouping_type, auto_sorting
+
+    #
+    def get_parameters(self):
+        sort_feat_cnt = self.dlg.radBut_featureCnt.isChecked()
+        sort_alphabetic = self.dlg.radBut_alpha.isChecked()
+        if sort_feat_cnt:
+            sort_type = "Feature count"
+        elif sort_alphabetic:
+            sort_type = "Alphabetic"
+        else:
+            sort_type = "UNKNOWN"
+
+        group_keep = self.dlg.radBut_keepGroups.isChecked()
+        group_geometry = self.dlg.radBut_geometryGroups.isChecked()
+        group_remove_groups = self.dlg.radBut_removeGroups.isChecked()
+        if group_keep:
+            grouping_type = "Keep groups"
+        elif group_geometry:
+            grouping_type = "Geometry groups"
+        elif group_remove_groups:
+            grouping_type = "Remove groups"
+        else:
+            grouping_type = "UNKNOWN"
+
+        auto_sorting = self.dlg.chcBox_autoSorting.isChecked()
+
+        return sort_type, grouping_type, auto_sorting
 
     # Updates the dictionary which contains the layers of the root or a specific group
     def update_dict(self, tree_layer, cur_dict):
