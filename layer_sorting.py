@@ -25,7 +25,7 @@ from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
-from qgis.core import QgsProject, QgsMapLayerType, QgsGeometry, QgsWkbTypes, QgsLayerTreeGroup, QgsLayerTreeLayer, QgsSettings
+from qgis.core import QgsProject, QgsMapLayerType, QgsGeometry, QgsWkbTypes, QgsLayerTreeGroup, QgsLayerTreeLayer, QgsSettings, QgsMapLayer, QgsLayerTreeNode
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -69,9 +69,12 @@ class LayerSorting:
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
 
+        project_root = QgsProject.instance().layerTreeRoot()  # Tree root
+        print("root: " + str(project_root))
+
         # Signals
-        QgsProject.instance().layersAdded.connect(self.layers_added)
-        QgsProject.instance().layersRemoved.connect(self.layers_added)
+        #project_root.addedChildren.connect(self.layers_added)
+        #QgsProject.instance().layersAdded.connect(self.layers_added)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -175,6 +178,7 @@ class LayerSorting:
         # will be set False in run()
         self.first_start = True
 
+
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
@@ -197,20 +201,23 @@ class LayerSorting:
 
         # OK has been pressed
         if result:
-            sort_type, grouping_type, auto_sort = self.get_parameters()
-            self.set_settings(sort_type, grouping_type, auto_sort)
-
-            project_root = QgsProject.instance().layerTreeRoot()  # Tree root
-            list_tree_layers = project_root.children()  # Lists all of the nodes in the tree root
-
-            self.perform_sorting(project_root, list_tree_layers, sort_type, grouping_type)
+            sort_type, grouping_type, auto_layer_added, auto_layer_renamed = self.get_parameters()
+            self.set_settings(sort_type, grouping_type, auto_layer_added, auto_layer_renamed)
+            self.perform_sorting(sort_type, grouping_type)
 
     #
-    def perform_sorting(self, project_root, list_tree_layers, sort_type, grouping_type):
-        print("sorting")
+    def perform_sorting(self, sort_type, grouping_type, added_layer=None):
+        project_root = QgsProject.instance().layerTreeRoot()  # Tree root
+
+        list_tree_layers = project_root.children()  # Lists all of the nodes in the tree root
+
+        print("TEST: " + str(list_tree_layers))
+
         list_groups = []  # List of original groups. This will only be used if the groups are removed
         dict_layers = {}  # Store layers according to geometry type for the root
         for tree_layer in list_tree_layers:  # Loops through all of the layers/groups in the root
+            print("tree_layer: " + str(tree_layer))
+
             if type(tree_layer) == QgsLayerTreeLayer:  # Layer found in tree root
                 dict_layers = self.update_dict(tree_layer, dict_layers)
             elif type(tree_layer) == QgsLayerTreeGroup:  # Group found in tree root
@@ -237,6 +244,8 @@ class LayerSorting:
                         for group_layer in list_group_layers:  # Loops through each of the layers in a group
                             dict_group_layers = self.update_dict(group_layer, dict_group_layers)
 
+                        print("dict: " + str(dict_group_layers))
+
                         # Adds the reordered layers to QGIS for the a group
                         # Removes the no longer needed unordered layers from QGIS
                         rasters, polygons, polylines, points = self.sort_type_groups(dict_group_layers, sort_type)
@@ -260,25 +269,36 @@ class LayerSorting:
         if grouping_type == "Remove groups":
             self.remove_groups(project_root, list_groups)
 
+    #
+    def layers_added(self):
+        sort_type, grouping_type, auto_layer_added, auto_layer_renamed = self.get_settings()
 
-    def layers_added(self, layer):
-        print("layer added: " + str(layer))
+        auto_layer_added = True
+
+        print("layers_added")
+        if auto_layer_added:
+            #layer_vector_layer = layer[0]
+
+            layer_vector_layer = None
+            self.perform_sorting(sort_type, grouping_type, layer_vector_layer)
 
     #
-    def set_settings(self, sort_type, grouping_type, auto_sorting):
+    def set_settings(self, sort_type, grouping_type, auto_layer_added, auto_layer_renamed):
         settings = QgsSettings()
         settings.setValue("layer_sorting/sort_type", sort_type)
         settings.setValue("layer_sorting/grouping_type", grouping_type)
-        settings.setValue("layer_sorting/auto_sorting", auto_sorting)
+        settings.setValue("layer_sorting/auto_layer_added", auto_layer_added)
+        settings.setValue("layer_sorting/auto_layer_renamed", auto_layer_renamed)
 
     #
     def get_settings(self):
         settings = QgsSettings()
         sort_type = settings.value("layer_sorting/sort_type", "UNKNOWN")
         grouping_type = settings.value("layer_sorting/grouping_type", "UNKNOWN")
-        auto_sorting = settings.value("layer_sorting/auto_sorting", "UNKNOWN")
+        auto_layer_added = settings.value("layer_sorting/layer_added", False)
+        auto_layer_renamed = settings.value("layer_sorting/auto_layer_renamed", False)
 
-        return sort_type, grouping_type, auto_sorting
+        return sort_type, grouping_type, auto_layer_added, auto_layer_renamed
 
     #
     def get_parameters(self):
@@ -303,9 +323,10 @@ class LayerSorting:
         else:
             grouping_type = "UNKNOWN"
 
-        auto_sorting = self.dlg.chcBox_autoSorting.isChecked()
+        auto_layer_added = self.dlg.chcBox_autoLayerAdded.isChecked()
+        auto_layer_renamed = self.dlg.chcBox_autoLayerRenamed.isChecked()
 
-        return sort_type, grouping_type, auto_sorting
+        return sort_type, grouping_type, auto_layer_added, auto_layer_renamed
 
     # Updates the dictionary which contains the layers of the root or a specific group
     def update_dict(self, tree_layer, cur_dict):
